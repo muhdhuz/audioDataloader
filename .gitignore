@@ -1,0 +1,7 @@
+*~
+tempRunOut
+.*
+!/.gitignore
+*.pyc
+*.sh
+audiolist
