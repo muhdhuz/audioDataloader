@@ -131,10 +131,10 @@ class AudioLoader(data.Dataset):
 		if self.transform is not None:
 			sample = self.transform(sample)
 		if self.paramdir is not None:
-			self.pm = paramManager.paramManager(self.datadir, self.paramdir) 
-			params = self.pm.getParams(self.filelist[chooseFileIndex]) 
+			pm = paramManager.paramManager(self.datadir, self.paramdir) 
+			params = pm.getParams(self.filelist[chooseFileIndex]) 
 			#print("param",params["meta"]["filename"])
-			paramdict = self.pm.resampleAllParams(params,seqLen,startoffset,startoffset+self.seqLenInSec,verbose=False)
+			paramdict = pm.resampleAllParams(params,seqLen,startoffset,startoffset+self.seqLenInSec,verbose=False)
 			if self.param_transform is not None:
 				paramtensor = self.param_transform(paramdict)
 				sample = {**sample,**paramtensor}  #combine audio samples and parameters here
