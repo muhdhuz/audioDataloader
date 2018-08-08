@@ -50,8 +50,8 @@ for i in range(len(adataset)):
         break 
 ```
 **Dependencies**  
-* pytorch  
-* librosa  
+* pytorch 0.4.0  
+* librosa 0.6.1  
 
 **Authors**  
 * Muhammad Huzaifah
