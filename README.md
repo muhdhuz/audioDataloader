@@ -35,11 +35,11 @@ seqLen = 5
 stride = 1
 
 adataset = AudioDataset(sr,seqLen,stride,
-				datadir="dataset",extension="wav",
-				paramdir="dataparam",prop=['rmse','instID','midiPitch'],  #parameters used for training can be specified here
-				transform=transform.Compose([mulawnEncode(256,0,1),array2tensor(torch.FloatTensor)]),
-				param_transform=dic2tensor(torch.FloatTensor),
-				target_transform=transform.Compose([mulaw(256),array2tensor(torch.LongTensor)]))
+		datadir="dataset",extension="wav",
+		paramdir="dataparam",prop=['rmse','instID','midiPitch'],  #parameters used for training can be specified here
+		transform=transform.Compose([mulawnEncode(256,0,1),array2tensor(torch.FloatTensor)]),
+		param_transform=dic2tensor(torch.FloatTensor),
+		target_transform=transform.Compose([mulaw(256),array2tensor(torch.LongTensor)]))
 
 for i in range(len(adataset)):
     inp,target = adataset[i]
