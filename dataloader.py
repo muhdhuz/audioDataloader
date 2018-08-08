@@ -1,10 +1,9 @@
 """
 to load each group containing: 1 audio wav file
                                1 parameter json file
-filenames will be contained within a csv file (1 group per line) - name: playlist
-1. parse playlist. get path of all objects in each line and append to list
-2. create a list of indices to draw samples (eg. index 52 = 4th wav file sample 390). this no. will also
-be the __len__
+filenames will be contained within a csv file (1 group per line), or directly loaded from a directory
+1. parse csvfile/directory. get path of all objects in each line and append to list
+2. create a list of indices to draw samples (eg. index 52 = 4th wav file sample 390). this no. will also be the __len__
 3. __getitem__:
     sample index
     load corresponding wav file
@@ -13,7 +12,7 @@ be the __len__
     convert audio to mu-law
     convert mu-law + params to tensor
 
-@muhammad huzaifah 19/07/2018 
+@muhammad huzaifah 08/08/2018 
 """
 
 import torch
@@ -28,7 +27,6 @@ from librosa.core import load,get_duration
 import math
 import torchvision.transforms as transform
 
-from transforms import mulawnEncode,ToTensor
 from paramManager import paramManager
 
 
@@ -72,34 +70,35 @@ def dataset_properties(filelist,sr,seqLen):
 	seqLenInSec = srInSec * seqLen              #length of 1 data sequence in sec
 	return fileLen,fileDuration,totalFileDuration,totalSamples,srInSec,seqLenInSec
 	
-def create_sampling_index(totalSamples,stride):
-	"""calculate total no. of data sections in dataset. Indices will later be used to draw samples (eg. index 52 = 4th wav file sample 390)
-	input params: totalSamples - combined total no of samples in dataset (get from dataset_properties)
-				  stride: shift in no. of samples between adjacent data sections. (seqLen - stride) samples will overlap between adjacent sections.  
+def create_sampling_index(totalSequences,stride):
+	"""calculate total no. of data sections in dataset. Indices will later be used to draw sequences (eg. index 52 = 4th wav file sample 390)
+	input params: totalSequences - combined total no of sequences in dataset (get from dataset_properties)
+				  stride: shift in no. of samples between adjacent data sections. (seqLen - stride) samples will overlap between adjacent sequences.  
 	"""	
-	indexLen = totalSamples // stride
+	indexLen = totalSequences // stride
 	return indexLen #list(range(indexLen))
 	
-def choose_sample(index,fileDuration,srInSec,stride):
+def choose_sequence(index,fileDuration,srInSec,stride):
 	"""identify the correct section of audio given the index sampled from indexLen"""
 	timestamp = index * srInSec * stride
 	chooseFileIndex = math.ceil(timestamp / fileDuration) - 1  #minus 1 since index start from 0
 	startoffset = timestamp - chooseFileIndex * fileDuration   #will load at this start time  	
 	return chooseFileIndex,startoffset
 	
-def load_sample(filelist,chooseFileIndex,startoffset,seqLenInSec,sr=None):
-	"""load the correct section of audio. If len of audio < seqLen (e.g. sections at the end of the file), then pad the rest with zeros"""
-	#print("audio",filelist[chooseFileIndex])
-	y,_ = load(filelist[chooseFileIndex],sr=sr,mono=True,offset=startoffset,duration=seqLenInSec)
-	if len(y) < seqLen:
-		y = np.concatenate((y,np.zeros(seqLen - len(y))))  #pad sequence up to seqLen
-	sample = {'audio':y}
-	return sample
+def load_sequence(filelist,chooseFileIndex,startoffset,seqLenInSec,seqLen,sr):
+	"""load the correct section of audio. If len of audio < seqLen+1 (e.g. sections at the end of the file), then pad the rest with zeros
+	We draw 1 sample more than seqLen so can take input=y[:-1] and target=y[1:]"""
+	y,_ = load(filelist[chooseFileIndex],sr=sr,mono=True,offset=startoffset,duration=seqLenInSec+(1/sr))
+	if len(y) < seqLen+1:
+		y = np.concatenate((y,np.zeros(seqLen+1 - len(y))))  #pad sequence up to seqLen
+	#sample = {'audio':y}
+	assert len(y) == seqLen+1, str(len(y))
+	return y
 
 
-class AudioLoader(data.Dataset):
+class AudioDataset(data.Dataset):
 	 
-	def __init__(self, sr, seqLen, stride, csvfile=None, datadir=None, paramdir=None, extension=None, transform=None, param_transform = None, target_transform=None):
+	def __init__(self, sr, seqLen, stride, csvfile=None, datadir=None, extension=None, paramdir=None, prop=None, transform=None, param_transform = None, target_transform=None):
 
 		if stride < 1:
 			raise ValueError("stride has to be >= 1")
@@ -116,46 +115,57 @@ class AudioLoader(data.Dataset):
 			
 		self.datadir = datadir
 		self.paramdir= paramdir
+		self.prop = prop
 		self.fileLen,self.fileDuration,self.totalFileDuration,self.totalSamples,self.srInSec,self.seqLenInSec = dataset_properties(self.filelist,sr,seqLen)
 		self.sr = sr
 		self.seqLen = seqLen
 		self.stride = stride
 		self.transform = transform
 		self.param_transform = param_transform
-		self.target_transform = target_transform #not used for now
+		self.target_transform = target_transform
 		self.indexLen = create_sampling_index(self.totalSamples,self.stride)
             
 	def __getitem__(self,index):
-		chooseFileIndex,startoffset = choose_sample(index+1,self.fileDuration,self.srInSec,self.stride)
-		sample = load_sample(self.filelist,chooseFileIndex,startoffset,self.seqLenInSec)
+		chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)
+		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLenInSec,self.seqLen,self.sr)
+		sequence = whole_sequence[:-1]
+		target = whole_sequence[1:]
 		if self.transform is not None:
-			sample = self.transform(sample)
+			sequence = self.transform(sequence)
+		if self.target_transform is not None:
+			target = self.target_transform(target)
 		if self.paramdir is not None:
 			pm = paramManager.paramManager(self.datadir, self.paramdir) 
 			params = pm.getParams(self.filelist[chooseFileIndex]) 
 			#print("param",params["meta"]["filename"])
-			paramdict = pm.resampleAllParams(params,seqLen,startoffset,startoffset+self.seqLenInSec,verbose=False)
+			paramdict = pm.resampleAllParams(params,self.seqLen,startoffset,startoffset+self.seqLenInSec,self.prop,verbose=False)
 			if self.param_transform is not None:
 				paramtensor = self.param_transform(paramdict)
-				sample = {**sample,**paramtensor}  #combine audio samples and parameters here
-		
-		
-		return sample	
+				#input = {**sequence,**paramtensor}  #combine audio samples and parameters here
+				input = torch.cat((sequence,paramtensor),1)  #input dim: (batch,seq,feature)			
+				
+		return input,target	
     
 	def __len__(self):
 		return self.indexLen 
 	
-"""   
+"""
+from transforms import mulawnEncode,mulaw,array2tensor,dic2tensor	
 sr = 16000
 seqLen = 5
 stride = 1
 
-adataset = AudioLoader(sr,seqLen,stride,datadir="dataset",paramdir="dataparam",extension="wav",
-						transform=transform.Compose([mulawnEncode(256,0,1),ToTensor()]),param_transform=ToTensor())
+adataset = AudioDataset(sr,seqLen,stride,
+						datadir="dataset",extension="wav",
+						paramdir="dataparam",prop=['rmse','instID','midiPitch'],  
+						transform=transform.Compose([mulawnEncode(256,0,1),array2tensor(torch.FloatTensor)]),
+						param_transform=dic2tensor(torch.FloatTensor),
+						target_transform=transform.Compose([mulaw(256),array2tensor(torch.LongTensor)]))
 
 for i in range(len(adataset)):
-    sample = adataset[i]
-    print(sample)
+    inp,target = adataset[i]
+    print(inp)
+    print(target)
     
     if i == 2:
         break 

@@ -100,6 +100,9 @@ class mulaw(mulawcore):
         #tensor = torch.zeros(ilen, 1, self.nvals).type(dtype)
         #eturn(torch.from_numpy(np.array(self._float2index(a))))
         return(self._float2index(a))
+	
+    def __call__(self,sample):
+        return self.float2index(np.transpose([sample]))
     
     
 ##===========================================================================
@@ -125,7 +128,7 @@ class mulawnEncode(mulawcore) :
 
     #array of floats to array of dipole vectors
     def __call__(self, sample) :
-        a = sample['audio']
+        a = sample
         ilen=len(a) # the sequence length
         ar = np.zeros((ilen, self.numNodes))
         #mu->decimation->normailize ; now we have a [0-1] float
@@ -145,7 +148,7 @@ class mulawnEncode(mulawcore) :
         elif (True) :
             print("odd n-hots don't work")
 
-        return {'audio':ar}
+        return ar
 
     def decode(self, sample) :
         ###NOT YET IMPLEMENTED!!!!!!!
@@ -253,12 +256,26 @@ class mulaw2() :
         return self._mu2float(a[:,1]*2.-1.) #the 2nd dipole component is just the decimated and normalized muval
  
  
-class ToTensor():
-    """Convert ndarrays in sample to Tensors."""
+class array2tensor():
+    """Convert ndarrays in sample to Tensors. Samples are assumed to be python dics"""
+    def __init__(self,dtype):
+        self.dtype = dtype
+	
+    def __call__(self, sample):
+        return torch.from_numpy(sample).type(self.dtype)
+	
+class dic2tensor():
+    """Convert ndarrays in sample to Tensors. Samples are assumed to be python dics"""
+    def __init__(self,dtype):
+        self.dtype = dtype
 
     def __call__(self, sample):
-        for key,value in sample.items():
-            sample[key] = torch.from_numpy(value).type(torch.FloatTensor) # add in->, sample['param1']
-        return sample
+        combined = np.stack([sample[i] for i in sample],axis=1)
+        if len(sample) > 1:           
+            tensor_sample = torch.squeeze(torch.from_numpy(combined).type(self.dtype))
+        else:
+            tensor_sample = torch.from_numpy(combined).type(self.dtype)		
+        
+        return tensor_sample
 
         

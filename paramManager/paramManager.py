@@ -199,7 +199,10 @@ class paramManager() :
             print("values:",params[prop]['values'])
         
         new_x = np.linspace(timestart, timeend, sr)
-        new_y = interp1d(params[prop]['times'],params[prop]['values'])(new_x)
+        try:
+            new_y = interp1d(params[prop]['times'],params[prop]['values'],fill_value="extrapolate")(new_x)
+        except ValueError:
+            print(new_x,params[prop]['times'],params[prop]['values'])
         if verbose:
             print("--to--")
             print("times:",new_x)
@@ -220,12 +223,15 @@ class paramManager() :
 				
         return new_x,new_y
 
-    def resampleAllParams(self,params,sr,timestart=None,timeend=None,verbose=False,overwrite=False):
-        '''resample all parameters in parameter file using resampleParam method.
-        Will ignore meta parameter.'''
+    def resampleAllParams(self,params,sr,timestart=None,timeend=None,prop=None,verbose=False,overwrite=False):
+        '''resample multiple parameters in parameter file using resampleParam method.
+        prop contains the list of selected parameters. If None specified will default to all parameters (except meta).
+        Will always ignore meta parameter.'''
         paramdict = {}
+        if prop is None:
+            prop = list(params.keys())
         for entry in params:
-            if entry != 'meta':
+            if entry != 'meta' and entry in prop:
                 if verbose:
                     print(entry)
                     _,value = self.resampleParam(params,entry,sr,timestart,timeend,verbose,overwrite)
@@ -233,5 +239,6 @@ class paramManager() :
                 else:
                     _,value = self.resampleParam(params,entry,sr,timestart,timeend,verbose,overwrite)
                 paramdict[str(entry)] = value
-        return paramdict		
+        return paramdict
+
             
