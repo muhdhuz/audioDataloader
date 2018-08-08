@@ -1,4 +1,4 @@
-## AudioLoader
+## AudioDataset
 
 A Pytorch dataset class for raw audio data. Overrides torch.utils.data.Dataset.  
 Loads audio files from a specified directory or a csv file containing file paths, together with the corresponding parameter file.  
