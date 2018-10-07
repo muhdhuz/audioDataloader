@@ -127,11 +127,11 @@ class AudioDataset(data.Dataset):
             
 	def __getitem__(self,index):
 		chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)
-		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLenInSec,self.seqLen,self.sr)
+		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLenInSec,self.seqLen,self.sr).reshape(-1,1)
 		sequence = whole_sequence[:-1]
 		target = whole_sequence[1:]
 		if self.transform is not None:
-			sequence = self.transform(sequence)
+			input = self.transform(sequence)
 		if self.target_transform is not None:
 			target = self.target_transform(target)
 		if self.paramdir is not None:
@@ -141,13 +141,26 @@ class AudioDataset(data.Dataset):
 			paramdict = pm.resampleAllParams(params,self.seqLen,startoffset,startoffset+self.seqLenInSec,self.prop,verbose=False)
 			if self.param_transform is not None:
 				paramtensor = self.param_transform(paramdict)
-				#input = {**sequence,**paramtensor}  #combine audio samples and parameters here
-				input = torch.cat((sequence,paramtensor),1)  #input dim: (batch,seq,feature)			
+				#print("param",paramtensor.shape)
+				#input = {**input,**paramtensor}  #combine audio samples and parameters here
+				input = torch.cat((input,paramtensor),1)  #input dim: (batch,seq,feature)	
+		else:
+			if self.transform is None:
+				input = sequence
 				
-		return input,target	
+		return input,target
     
 	def __len__(self):
 		return self.indexLen 
+		
+	def rand_sample(self,index=None):
+		if index is None:
+			index = np.random.randint(self.indexLen)
+		chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)
+		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLenInSec,self.seqLen,self.sr).reshape(-1,1)
+		sequence = whole_sequence[:-1]
+		return sequence
+		
 	
 """
 from transforms import mulawnEncode,mulaw,array2tensor,dic2tensor	
