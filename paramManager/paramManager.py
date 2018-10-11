@@ -230,8 +230,8 @@ class paramManager() :
         paramdict = {}
         if prop is None:
             prop = list(params.keys())
-        for entry in params:
-            if entry != 'meta' and entry in prop:
+        for entry in prop:
+            if entry != 'meta' and entry in params:
                 if verbose:
                     print(entry)
                     _,value = self.resampleParam(params,entry,sr,timestart,timeend,verbose,overwrite)

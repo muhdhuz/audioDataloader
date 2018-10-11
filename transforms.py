@@ -279,7 +279,7 @@ class dic2tensor():
 		
 		return tensor_sample
 		
-class inject_noise():
+class injectNoise():
 	"""Add some noise to the signal. Noise in the range of (low,high) and scaled by weight."""
 	def __init__(self,low=-1,high=1,weight=0.1):
 		self.low = low
@@ -288,9 +288,36 @@ class inject_noise():
 			raise ValueError("weight has to be <= 1")
 		else:
 			self.noiseweight = weight
-			self.signalweight = 1 - weight
 	
 	def __call__(self, sample):
-		return self.signalweight * sample + self.noiseweight * np.random.uniform(self.low, self.high, size=len(sample)).reshape(-1,1)
+		return sample + self.noiseweight * np.random.uniform(self.low, self.high, size=len(sample)).reshape(-1,1)
 
-		
+class normalizeDim():
+	"""Normalizes one dimension of a dictionary to [0,1].
+		NOTE: pmin and pmax should correspond to the min and max AFTER the paramManager has loaded the param files.
+	Args:
+		pname - the name of the parameter to normalize - must match one used in the param file
+		pmin - the value that will be normalized to 0
+		pmax - the value that will be normalized to 1
+	"""
+	def __init__(self, pname, pmin, pmax):
+		self.pname = pname
+		self.pmin = pmin
+		self.pmax = pmax
+		self.scale= pmax-pmin
+
+	def __call__(self, sample):  
+		#print("QQ",self.pname)	
+		#if not any(sample[self.pname]) :
+		#	raise ValueError("param file has no property {}".format(self.pname))
+		#else:
+		#    print("sample.pname1 = {}".format(sample[self.pname]))
+		try:
+			value = sample[self.pname]
+		except KeyError:
+		# Key is not present
+			print("param file has no property {}".format(self.pname))
+		if any((elem < self.pmin or elem > self.pmax) for elem in sample[self.pname]) :
+			raise ValueError('NormalizeDim: an element was found outside [pmin={}, pmax={}] range'.format(self.pmin, self.pmax))
+		sample[self.pname] = [(x-self.pmin)/self.scale for x in sample[self.pname]]
+		return sample		
