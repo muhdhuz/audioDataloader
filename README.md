@@ -24,8 +24,8 @@ tensor([[ 128],
         [ 130]])
 ```		
 **Parameters**  
-The parameters files consist of json objects structed as nested python dicts. They are saved, loaded and modified via the [paramManager library](https://github.com/lonce/paramManager) by Lonce Wyse.
-The paramManager found in this repository extends the original library with methods for resampling and updating params. To learn how to use ParamManager, try out the instructional ProcessFiles.ipynb.
+The parameters files consist of json objects structed as nested python dicts. They are saved, loaded and modified via the [paramManager library](https://github.com/lonce/paramManager). 
+To learn how to use ParamManager, try out the instructional ProcessFiles.ipynb in the paramManager repo.
 
 **Running the AudioDataset class**
 ```bash
@@ -51,7 +51,7 @@ for i in range(len(adataset)):
 ```
 **Dependencies**  
 * pytorch 0.4.0  
-* librosa 0.6.1  
+* PySoundFile 0.9.0  
 
 **Authors**  
 * Muhammad Huzaifah

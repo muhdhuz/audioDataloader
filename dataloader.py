@@ -12,7 +12,7 @@ filenames will be contained within a csv file (1 group per line), or directly lo
     convert audio to mu-law
     convert mu-law + params to tensor
 
-@muhammad huzaifah 08/08/2018 
+@muhammad huzaifah 16/10/2018 
 """
 
 import torch
@@ -23,9 +23,10 @@ import csv
 from itertools import chain
 import numpy as np
 from natsort import natsorted
-from librosa.core import load,get_duration
+#from librosa.core import load,get_duration
 import math
 import torchvision.transforms as transform
+import soundfile as sf 
 
 from paramManager import paramManager
 
@@ -51,8 +52,9 @@ def parse_playlist(csvfile):
 	return filelist
 	
 def check_duration(filelist):
-	"""use librosa's get_duration method to find the duration of all files in filelist"""
-	filedurations = [get_duration(filename=f) for f in filelist]
+	"""use PySoundFile's info method to find the duration of all files in filelist"""
+	#filedurations = [get_duration(filename=f) for f in filelist]
+	filedurations = [sf.info(file=f).duration for f in filelist]
 	assert filedurations.count(filedurations[0]) == len(filedurations), "File durations are not all the same!"
 	return filedurations[0]
 	
@@ -76,7 +78,7 @@ def create_sampling_index(totalSequences,stride):
 				  stride: shift in no. of samples between adjacent data sections. (seqLen - stride) samples will overlap between adjacent sequences.  
 	"""	
 	indexLen = totalSequences // stride
-	return indexLen #list(range(indexLen))
+	return indexLen
 	
 def choose_sequence(index,fileDuration,srInSec,stride):
 	"""identify the correct section of audio given the index sampled from indexLen"""
@@ -85,12 +87,14 @@ def choose_sequence(index,fileDuration,srInSec,stride):
 	startoffset = timestamp - chooseFileIndex * fileDuration   #will load at this start time  	
 	return chooseFileIndex,startoffset
 	
-def load_sequence(filelist,chooseFileIndex,startoffset,seqLenInSec,seqLen,sr):
+def load_sequence(filelist,chooseFileIndex,startoffset,seqLen,sr):
 	"""load the correct section of audio. If len of audio < seqLen+1 (e.g. sections at the end of the file), then pad the rest with zeros
 	We draw 1 sample more than seqLen so can take input=y[:-1] and target=y[1:]"""
-	y,_ = load(filelist[chooseFileIndex],sr=sr,mono=True,offset=startoffset,duration=seqLenInSec+(1/sr))
-	if len(y) < seqLen+1:
-		y = np.concatenate((y,np.zeros(seqLen+1 - len(y))))  #pad sequence up to seqLen
+	y,_ = sf.read(filelist[chooseFileIndex],frames=seqLen+1,start=round(startoffset*sr),fill_value=0.) 
+		
+	#y,_ = load(filelist[chooseFileIndex],sr=sr,mono=True,offset=startoffset,duration=seqLenInSec+(1/sr))
+	#if len(y) < seqLen+1:
+	#	y = np.concatenate((y,np.zeros(seqLen+1 - len(y))))  #pad sequence up to seqLen
 	#sample = {'audio':y}
 	assert len(y) == seqLen+1, str(len(y))
 	return y
@@ -127,7 +131,7 @@ class AudioDataset(data.Dataset):
             
 	def __getitem__(self,index):
 		chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)
-		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLenInSec,self.seqLen,self.sr).reshape(-1,1)
+		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr).reshape(-1,1)
 		sequence = whole_sequence[:-1]
 		target = whole_sequence[1:]
 		if self.transform is not None:
@@ -157,7 +161,7 @@ class AudioDataset(data.Dataset):
 		if index is None:
 			index = np.random.randint(self.indexLen)
 		chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)
-		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLenInSec,self.seqLen,self.sr).reshape(-1,1)
+		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr).reshape(-1,1)
 		sequence = whole_sequence[:-1]
 		return sequence
 		
