@@ -72,12 +72,12 @@ def dataset_properties(filelist,sr,seqLen):
 	seqLenInSec = srInSec * seqLen              #length of 1 data sequence in sec
 	return fileLen,fileDuration,totalFileDuration,totalSamples,srInSec,seqLenInSec
 	
-def create_sampling_index(totalSequences,stride):
+def create_sampling_index(totalSamples,stride):
 	"""calculate total no. of data sections in dataset. Indices will later be used to draw sequences (eg. index 52 = 4th wav file sample 390)
-	input params: totalSequences - combined total no of sequences in dataset (get from dataset_properties)
+	input params: totalSamples - combined total no of samples in dataset (get from dataset_properties)
 				  stride: shift in no. of samples between adjacent data sections. (seqLen - stride) samples will overlap between adjacent sequences.  
 	"""	
-	indexLen = totalSequences // stride
+	indexLen = totalSamples // stride
 	return indexLen
 	
 def choose_sequence(index,fileDuration,srInSec,stride):
@@ -88,12 +88,13 @@ def choose_sequence(index,fileDuration,srInSec,stride):
 	return chooseFileIndex,startoffset
 	
 def load_sequence(filelist,chooseFileIndex,startoffset,seqLen,sr):
-	"""load the correct section of audio. If len of audio < seqLen+1 (e.g. sections at the end of the file), then pad the rest with zeros
+	"""load the correct section of audio. If len of audio < seqLen+1 (e.g. sections at the end of the file), then draw another section.
 	We draw 1 sample more than seqLen so can take input=y[:-1] and target=y[1:]"""
-	y,_ = sf.read(filelist[chooseFileIndex],frames=seqLen+1,start=round(startoffset*sr),fill_value=0.) 
-		
+	y,_ = sf.read(filelist[chooseFileIndex],frames=seqLen+1,start=round(startoffset*sr))
+			
 	#y,_ = load(filelist[chooseFileIndex],sr=sr,mono=True,offset=startoffset,duration=seqLenInSec+(1/sr))
-	#if len(y) < seqLen+1:
+	while len(y) < seqLen+1:
+		y,_ = sf.read(filelist[chooseFileIndex],frames=seqLen+1,start=round(startoffset*sr))
 	#	y = np.concatenate((y,np.zeros(seqLen+1 - len(y))))  #pad sequence up to seqLen
 	#sample = {'audio':y}
 	assert len(y) == seqLen+1, str(len(y))
