@@ -90,14 +90,13 @@ def choose_sequence(index,fileDuration,srInSec,stride):
 def load_sequence(filelist,chooseFileIndex,startoffset,seqLen,sr):
 	"""load the correct section of audio. If len of audio < seqLen+1 (e.g. sections at the end of the file), then draw another section.
 	We draw 1 sample more than seqLen so can take input=y[:-1] and target=y[1:]"""
-	y,_ = sf.read(filelist[chooseFileIndex],frames=seqLen+1,start=round(startoffset*sr))
-			
+	y,_ = sf.read(filelist[chooseFileIndex],frames=seqLen+1,start=round(startoffset*sr))			
 	#y,_ = load(filelist[chooseFileIndex],sr=sr,mono=True,offset=startoffset,duration=seqLenInSec+(1/sr))
-	while len(y) < seqLen+1:
-		y,_ = sf.read(filelist[chooseFileIndex],frames=seqLen+1,start=round(startoffset*sr))
+	if len(y) < seqLen+1:
+		y = None
 	#	y = np.concatenate((y,np.zeros(seqLen+1 - len(y))))  #pad sequence up to seqLen
 	#sample = {'audio':y}
-	assert len(y) == seqLen+1, str(len(y))
+	#assert len(y) == seqLen+1, str(len(y))
 	return y
 
 
@@ -132,7 +131,13 @@ class AudioDataset(data.Dataset):
             
 	def __getitem__(self,index):
 		chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)
-		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr).reshape(-1,1)
+		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr)
+		while whole_sequence is None: #if len(whole_sequence) < self.seqLen+1, pick another random section
+			index = np.random.randint(self.indexLen)
+			chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)
+			whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr)
+		assert len(whole_sequence) == self.seqLen+1, str(len(whole_sequence))
+		whole_sequence = whole_sequence.reshape(-1,1)
 		sequence = whole_sequence[:-1]
 		target = whole_sequence[1:]
 		if self.transform is not None:
