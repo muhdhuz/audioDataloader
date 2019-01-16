@@ -102,7 +102,7 @@ class mulaw(mulawcore):
 		return(self._float2index(a))
 	
 	def __call__(self,sample):
-		return self.float2index(sample)  #np.transpose([sample])
+		return self.float2index(sample)	 #np.transpose([sample])
 	
 	
 ##===========================================================================
@@ -130,7 +130,7 @@ class mulawnEncode(mulawcore) :
 	def __call__(self, sample) :
 		a = sample
 		ilen=len(a) # the sequence length
-		ar = np.zeros(ilen)  #((ilen, self.numNodes))
+		ar = np.zeros(ilen)	 #((ilen, self.numNodes))
 		#mu->decimation->normailize ; now we have a [0-1] float
 		dnmuval=(1.+self._decimate(self._float2mu(a)))/2. #decimated to num quant vales, normalized to [0,1]
 		#print("dnmuval",dnmuval.shape)
@@ -280,17 +280,23 @@ class dic2tensor():
 		return tensor_sample
 		
 class injectNoise():
-	"""Add some noise to the signal. Noise in the range of (low,high) and scaled by weight."""
-	def __init__(self,low=-1,high=1,weight=0.1):
+	"""Add some noise to the signal. 
+	If constant=True, constant noise in the range of (low,high) and scaled by weight added to all samples
+	If constant=False, noise will be added according to a constant signal-to-noise-ratio controlled by weight. (low,high) will be ignored"""
+	def __init__(self,low=-1,high=1,weight=0.1,constant=False):
 		self.low = low
 		self.high = high
+		self.constant = constant
 		if weight > 1:
 			raise ValueError("weight has to be <= 1")
 		else:
 			self.noiseweight = weight
 	
 	def __call__(self, sample):
-		return sample + self.noiseweight * np.random.uniform(self.low, self.high, size=len(sample)).reshape(-1,1)
+		if self.constant: 
+			return sample + self.noiseweight * np.random.uniform(self.low, self.high, size=len(sample)).reshape(-1,1)
+		else:
+			return sample + self.noiseweight * np.random.uniform(sample.min(), sample.max(), size=len(sample)).reshape(-1,1)
 
 class normalizeDim():
 	"""Normalizes one dimension of a dictionary to [0,1].
@@ -306,12 +312,11 @@ class normalizeDim():
 		self.pmax = pmax
 		self.scale= pmax-pmin
 
-	def __call__(self, sample):  
-		#print("QQ",self.pname)	
+	def __call__(self, sample):		
 		#if not any(sample[self.pname]) :
 		#	raise ValueError("param file has no property {}".format(self.pname))
 		#else:
-		#    print("sample.pname1 = {}".format(sample[self.pname]))
+		#	 print("sample.pname1 = {}".format(sample[self.pname]))
 		try:
 			value = sample[self.pname]
 		except KeyError:

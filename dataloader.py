@@ -1,16 +1,16 @@
 """
 to load each group containing: 1 audio wav file
-                               1 parameter json file
+							   1 parameter json file
 filenames will be contained within a csv file (1 group per line), or directly loaded from a directory
 1. parse csvfile/directory. get path of all objects in each line and append to list
 2. create a list of indices to draw samples (eg. index 52 = 4th wav file sample 390). this no. will also be the __len__
 3. __getitem__:
-    sample index
-    load corresponding wav file
-    pull out correct audio sample sequence
-    load corresponding params
-    convert audio to mu-law
-    convert mu-law + params to tensor
+	sample index
+	load corresponding wav file
+	pull out correct audio sample sequence
+	load corresponding params
+	convert audio to mu-law
+	convert mu-law + params to tensor
 
 @muhammad huzaifah 16/10/2018 
 """
@@ -46,8 +46,8 @@ def list2csv(filelist,csvfile):
 def parse_playlist(csvfile):
 	"""read in csvfile and parse line by line to a python list"""
 	with open(csvfile, 'r', newline='') as f:
-                reader = csv.reader(f)
-                filelist = natsorted(list(chain.from_iterable(reader)))                
+				reader = csv.reader(f)
+				filelist = natsorted(list(chain.from_iterable(reader)))				   
 	#filelist = natsorted([line for line in pd.read_csv(csvfile,sep=',',header=None,chunksize=1)]) no longer using pandas
 	return filelist
 	
@@ -64,12 +64,12 @@ def dataset_properties(filelist,sr,seqLen):
 				  sr - sample rate of the audio
 				  seqLen - length of each data section measured in samples
 	"""
-	fileLen = len(filelist)                     #no of files in filelist
-	fileDuration = check_duration(filelist)     #duration of each file in sec
-	totalFileDuration = fileLen * fileDuration  #total duration of all files
-	totalSamples = int(fileLen * fileDuration * sr)  #combined total no of samples
-	srInSec = 1/sr                              #sampling rate in sec
-	seqLenInSec = srInSec * seqLen              #length of 1 data sequence in sec
+	fileLen = len(filelist)						#no of files in filelist
+	fileDuration = check_duration(filelist)		#duration of each file in sec
+	totalFileDuration = fileLen * fileDuration	#total duration of all files
+	totalSamples = int(fileLen * fileDuration * sr)	 #combined total no of samples
+	srInSec = 1/sr								#sampling rate in sec
+	seqLenInSec = srInSec * seqLen				#length of 1 data sequence in sec
 	return fileLen,fileDuration,totalFileDuration,totalSamples,srInSec,seqLenInSec
 	
 def create_sampling_index(totalSamples,stride):
@@ -84,7 +84,7 @@ def choose_sequence(index,fileDuration,srInSec,stride):
 	"""identify the correct section of audio given the index sampled from indexLen"""
 	timestamp = index * srInSec * stride
 	chooseFileIndex = math.ceil(timestamp / fileDuration) - 1  #minus 1 since index start from 0
-	startoffset = timestamp - chooseFileIndex * fileDuration   #will load at this start time  	
+	startoffset = timestamp - chooseFileIndex * fileDuration   #will load at this start time	
 	return chooseFileIndex,startoffset
 	
 def load_sequence(filelist,chooseFileIndex,startoffset,seqLen,sr):
@@ -94,7 +94,7 @@ def load_sequence(filelist,chooseFileIndex,startoffset,seqLen,sr):
 	#y,_ = load(filelist[chooseFileIndex],sr=sr,mono=True,offset=startoffset,duration=seqLenInSec+(1/sr))
 	if len(y) < seqLen+1:
 		y = None
-	#	y = np.concatenate((y,np.zeros(seqLen+1 - len(y))))  #pad sequence up to seqLen
+	#	y = np.concatenate((y,np.zeros(seqLen+1 - len(y))))	 #pad sequence up to seqLen
 	#sample = {'audio':y}
 	#assert len(y) == seqLen+1, str(len(y))
 	return y
@@ -128,7 +128,7 @@ class AudioDataset(data.Dataset):
 		self.param_transform = param_transform
 		self.target_transform = target_transform
 		self.indexLen = create_sampling_index(self.totalSamples,self.stride)
-            
+			
 	def __getitem__(self,index):
 		chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)
 		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr)
@@ -159,15 +159,17 @@ class AudioDataset(data.Dataset):
 				input = sequence
 				
 		return input,target
-    
+	
 	def __len__(self):
 		return self.indexLen 
 		
 	def rand_sample(self,index=None):
-		if index is None:
-			index = np.random.randint(self.indexLen)
-		chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)
-		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr).reshape(-1,1)
+		whole_sequence = None
+		while whole_sequence is None:
+			if index is None:
+				index = np.random.randint(self.indexLen)
+			chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)		
+			whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr).reshape(-1,1)
 		sequence = whole_sequence[:-1]
 		return sequence
 		
@@ -179,18 +181,18 @@ seqLen = 5
 stride = 1
 
 adataset = AudioDataset(sr,seqLen,stride,
-						datadir="dataset",extension="wav",
-						paramdir="dataparam",prop=['rmse','instID','midiPitch'],  
-						transform=transform.Compose([mulawnEncode(256,0,1),array2tensor(torch.FloatTensor)]),
-						param_transform=dic2tensor(torch.FloatTensor),
-						target_transform=transform.Compose([mulaw(256),array2tensor(torch.LongTensor)]))
+			datadir="dataset",extension="wav",
+			paramdir="dataparam",prop=['rmse','instID','midiPitch'],  
+			transform=transform.Compose([mulawnEncode(256,0,1),array2tensor(torch.FloatTensor)]),
+			param_transform=dic2tensor(torch.FloatTensor),
+			target_transform=transform.Compose([mulaw(256),array2tensor(torch.LongTensor)]))
 
 for i in range(len(adataset)):
-    inp,target = adataset[i]
-    print(inp)
-    print(target)
-    
-    if i == 2:
-        break 
+	inp,target = adataset[i]
+	print(inp)
+	print(target)
+	
+	if i == 2:
+		break 
 """
 
