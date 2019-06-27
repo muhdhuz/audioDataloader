@@ -12,7 +12,7 @@ filenames will be contained within a csv file (1 group per line), or directly lo
 	convert audio to mu-law
 	convert mu-law + params to tensor
 
-@muhammad huzaifah 16/10/2018 
+@muhammad huzaifah 27/06/2019
 """
 
 import torch
@@ -51,12 +51,13 @@ def parse_playlist(csvfile):
 	#filelist = natsorted([line for line in pd.read_csv(csvfile,sep=',',header=None,chunksize=1)]) no longer using pandas
 	return filelist
 	
-def check_duration(filelist):
+def check_duration(filelist,allsame=False):
 	"""use PySoundFile's info method to find the duration of all files in filelist"""
-	#filedurations = [get_duration(filename=f) for f in filelist]
+	#filedurations = [get_duration(filename=f) for f in filelist] #librosa
 	filedurations = [sf.info(file=f).duration for f in filelist]
-	assert filedurations.count(filedurations[0]) == len(filedurations), "File durations are not all the same!"
-	return filedurations[0]
+	if allsame == True:
+		assert filedurations.count(filedurations[0]) == len(filedurations), "File durations are not all the same!"
+	return filedurations
 	
 def dataset_properties(filelist,sr,seqLen):
 	"""return several dataset parameters 
@@ -66,8 +67,9 @@ def dataset_properties(filelist,sr,seqLen):
 	"""
 	fileLen = len(filelist)						#no of files in filelist
 	fileDuration = check_duration(filelist)		#duration of each file in sec
-	totalFileDuration = fileLen * fileDuration	#total duration of all files
-	totalSamples = int(fileLen * fileDuration * sr)	 #combined total no of samples
+	#totalFileDuration = fileLen * fileDuration[0]	#total duration of all files
+	totalFileDuration = sum(fileDuration)
+	totalSamples = int(totalFileDuration * sr)	 #combined total no of samples
 	srInSec = 1/sr								#sampling rate in sec
 	seqLenInSec = srInSec * seqLen				#length of 1 data sequence in sec
 	return fileLen,fileDuration,totalFileDuration,totalSamples,srInSec,seqLenInSec
@@ -83,8 +85,22 @@ def create_sampling_index(totalSamples,stride):
 def choose_sequence(index,fileDuration,srInSec,stride):
 	"""identify the correct section of audio given the index sampled from indexLen"""
 	timestamp = index * srInSec * stride
-	chooseFileIndex = math.ceil(timestamp / fileDuration) - 1  #minus 1 since index start from 0
-	startoffset = timestamp - chooseFileIndex * fileDuration   #will load at this start time	
+	chooseFileIndex = math.ceil(timestamp / fileDuration[0]) - 1  #minus 1 since index start from 0
+	startoffset = timestamp - chooseFileIndex * fileDuration[0]   #will load at this start time	
+	return chooseFileIndex,startoffset
+
+def choose_sequence_notsame(index,fileDuration,srInSec,stride):
+	"""alternative algorithm to choose_sequence if the file durations are not all the same. 
+	Current default since can also be used if file durations are all the same (and marginally faster)"""
+	timestamp = index * srInSec * stride
+	cummulduration = 0
+	chooseFileIndex = -1
+	for duration in fileDuration:
+		cummulduration += duration
+		chooseFileIndex += 1
+		if cummulduration >= timestamp:
+			break
+	startoffset = timestamp - (cummulduration - fileDuration[chooseFileIndex]) #will load at this start time	
 	return chooseFileIndex,startoffset
 	
 def load_sequence(filelist,chooseFileIndex,startoffset,seqLen,sr):
@@ -130,11 +146,11 @@ class AudioDataset(data.Dataset):
 		self.indexLen = create_sampling_index(self.totalSamples,self.stride)
 			
 	def __getitem__(self,index):
-		chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)
+		chooseFileIndex,startoffset = choose_sequence_notsame(index+1,self.fileDuration,self.srInSec,self.stride)
 		whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr)
 		while whole_sequence is None: #if len(whole_sequence) < self.seqLen+1, pick another random section
 			index = np.random.randint(self.indexLen)
-			chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)
+			chooseFileIndex,startoffset = choose_sequence_notsame(index+1,self.fileDuration,self.srInSec,self.stride)
 			whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr)
 		assert len(whole_sequence) == self.seqLen+1, str(len(whole_sequence))
 		whole_sequence = whole_sequence.reshape(-1,1)
@@ -168,7 +184,7 @@ class AudioDataset(data.Dataset):
 		while whole_sequence is None:
 			if index is None:
 				index = np.random.randint(self.indexLen)
-			chooseFileIndex,startoffset = choose_sequence(index+1,self.fileDuration,self.srInSec,self.stride)		
+			chooseFileIndex,startoffset = choose_sequence_notsame(index+1,self.fileDuration,self.srInSec,self.stride)	
 			whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr).reshape(-1,1)
 		sequence = whole_sequence[:-1]
 		return sequence
