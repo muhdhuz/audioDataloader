@@ -185,7 +185,8 @@ class AudioDataset(data.Dataset):
 			if index is None:
 				index = np.random.randint(self.indexLen)
 			chooseFileIndex,startoffset = choose_sequence_notsame(index+1,self.fileDuration,self.srInSec,self.stride)	
-			whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr).reshape(-1,1)
+			whole_sequence = load_sequence(self.filelist,chooseFileIndex,startoffset,self.seqLen,self.sr)
+		whole_sequence = whole_sequence.reshape(-1,1)
 		sequence = whole_sequence[:-1]
 		return sequence
 		
