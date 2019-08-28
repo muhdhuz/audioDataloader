@@ -1,4 +1,7 @@
 """
+Audio dataloader is a chunker and dataloader that loads a part of an audio clip 
+plus corresponding parameters (if any) from a param file. To be used with pytorch platform.
+
 to load each group containing: 1 audio wav file
 							   1 parameter json file
 filenames will be contained within a csv file (1 group per line), or directly loaded from a directory
@@ -12,7 +15,7 @@ filenames will be contained within a csv file (1 group per line), or directly lo
 	convert audio to mu-law
 	convert mu-law + params to tensor
 
-@muhammad huzaifah 27/06/2019
+@muhammad huzaifah 27/08/2019
 """
 
 import torch
@@ -23,7 +26,6 @@ import csv
 from itertools import chain
 import numpy as np
 from natsort import natsorted
-#from librosa.core import load,get_duration
 import math
 import torchvision.transforms as transform
 import soundfile as sf 
@@ -35,6 +37,22 @@ def file2list(rootdir,extension):
 	"""append to list all files in rootdir with given extension"""
 	filelist = [os.path.join(rootdir, f) for f in os.listdir(rootdir) if f.endswith('.' + extension)]
 	return filelist
+
+def listDirectory_all(directory,topdown=True,fileExtList='.wav',regex=None):
+	"""returns a list of all files in directory and all its subdirectories"""
+	fileList = []
+	fnameList = []
+	for root, _, files in os.walk(directory, topdown=topdown):
+		for name in files:
+			if regex is not None:
+				if ((os.path.splitext(name)[1] in fileExtList) and (regex in name)):
+					fileList.append(os.path.join(root, name))
+					fnameList.append(name)
+			else:
+				if (os.path.splitext(name)[1] in fileExtList):
+					fileList.append(os.path.join(root, name))
+					fnameList.append(name)
+	return fileList , fnameList
 
 def list2csv(filelist,csvfile):
 	"""write each entry in filelist to csvfile, 1 entry per line. csvfile is a string of the csv filename"""
@@ -52,8 +70,9 @@ def parse_playlist(csvfile):
 	return filelist
 	
 def check_duration(filelist,allsame=False):
-	"""use PySoundFile's info method to find the duration of all files in filelist"""
-	#filedurations = [get_duration(filename=f) for f in filelist] #librosa
+	"""use PySoundFile's info method to find the duration of all files in filelist
+	input params: allsame=True if you expect all durations to be the same, then routine will test this
+	returns: a list of all durations in filelist"""
 	filedurations = [sf.info(file=f).duration for f in filelist]
 	if allsame == True:
 		assert filedurations.count(filedurations[0]) == len(filedurations), "File durations are not all the same!"
@@ -67,7 +86,6 @@ def dataset_properties(filelist,sr,seqLen):
 	"""
 	fileLen = len(filelist)						#no of files in filelist
 	fileDuration = check_duration(filelist)		#duration of each file in sec
-	#totalFileDuration = fileLen * fileDuration[0]	#total duration of all files
 	totalFileDuration = sum(fileDuration)
 	totalSamples = int(totalFileDuration * sr)	 #combined total no of samples
 	srInSec = 1/sr								#sampling rate in sec
@@ -83,7 +101,8 @@ def create_sampling_index(totalSamples,stride):
 	return indexLen
 	
 def choose_sequence(index,fileDuration,srInSec,stride):
-	"""identify the correct section of audio given the index sampled from indexLen"""
+	"""identify the correct section of audio given the index sampled from indexLen
+	note: depreciated for choose_sequence_notsame"""
 	timestamp = index * srInSec * stride
 	chooseFileIndex = math.ceil(timestamp / fileDuration[0]) - 1  #minus 1 since index start from 0
 	startoffset = timestamp - chooseFileIndex * fileDuration[0]   #will load at this start time	
@@ -129,7 +148,7 @@ class AudioDataset(data.Dataset):
 			self.filelist = parse_playlist(csvfile)
 		elif datadir is not None:
 			assert extension is not None, "Please input a file extension to use!"
-			self.filelist = file2list(datadir,extension)
+			self.filelist,self.fnamelist  = listDirectory_all(directory=datadir,fileExtList=extension)
 		else:
 			raise ValueError("Please input either a csvfile or data directory to read from!")
 			
@@ -161,9 +180,8 @@ class AudioDataset(data.Dataset):
 		if self.target_transform is not None:
 			target = self.target_transform(target)
 		if self.paramdir is not None:
-			pm = paramManager.paramManager(self.datadir, self.paramdir) 
+			pm = paramManager.paramManager(self.datadir, self.paramdir)
 			params = pm.getParams(self.filelist[chooseFileIndex]) 
-			#print("param",params["meta"]["filename"])
 			paramdict = pm.resampleAllParams(params,self.seqLen,startoffset,startoffset+self.seqLenInSec,self.prop,verbose=False)
 			if self.param_transform is not None:
 				paramtensor = self.param_transform(paramdict)
